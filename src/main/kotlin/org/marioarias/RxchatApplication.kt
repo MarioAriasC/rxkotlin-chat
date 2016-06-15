@@ -58,7 +58,7 @@ fun RabbitTemplate.general(message: GeneralMessage): Unit {
     convertAndSend(chatGeneral, "", message.body)
 }
 
-fun RabbitTemplate.privatelly(message: PrivateMessage): Unit {
+fun RabbitTemplate.privately(message: PrivateMessage): Unit {
     convertAndSend(message.routingKey, message.body)
 }
 
@@ -111,7 +111,7 @@ class Chat(val context: ConfigurableApplicationContext,
     override fun onNext(message: ChatMessage) {
         when(message){
             is GeneralMessage -> template.general(message)
-            is PrivateMessage -> template.privatelly(message)
+            is PrivateMessage -> template.privately(message)
         }
     }
 
