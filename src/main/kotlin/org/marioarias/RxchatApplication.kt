@@ -8,6 +8,7 @@ import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Import
 import rx.Observable
 import rx.Observer
+import rx.lang.kotlin.observable
 import rx.observables.ConnectableObservable
 import rx.schedulers.Schedulers
 import java.io.IOException
@@ -129,29 +130,27 @@ class Chat(val context: ConfigurableApplicationContext,
 
 }
 
-fun scanner(): ConnectableObservable<String> {
-    return Observable.create<String> { subscriber ->
-        try {
-            if (subscriber.isUnsubscribed) {
-                return@create
-            }
-
-            val scanner = Scanner(System.`in`)
-            while (true) {
-                val line = scanner.nextLine()!!
-                if (line.equals(":q!")) {
-                    break
-                }
-                subscriber.onNext(line)
-            }
-        } catch (e: IOException) {
-            subscriber.onError(e)
+fun scanner(): ConnectableObservable<String> = observable<String> { subscriber ->
+    try {
+        if (subscriber.isUnsubscribed) {
+            return@observable
         }
 
-        if (!subscriber.isUnsubscribed) {
-            subscriber.onCompleted()
+        val scanner = Scanner(System.`in`)
+        while (true) {
+            val line = scanner.nextLine()!!
+            if (line.equals(":q!")) {
+                break
+            }
+            subscriber.onNext(line)
         }
-    }.publish()
-}
+    } catch (e: IOException) {
+        subscriber.onError(e)
+    }
+
+    if (!subscriber.isUnsubscribed) {
+        subscriber.onCompleted()
+    }
+}.publish()
 
 
