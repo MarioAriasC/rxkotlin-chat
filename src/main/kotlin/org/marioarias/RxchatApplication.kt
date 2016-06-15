@@ -13,7 +13,6 @@ import rx.schedulers.Schedulers
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.CountDownLatch
-import java.util.regex.Matcher
 import java.util.regex.Pattern
 
 
@@ -21,41 +20,17 @@ import java.util.regex.Pattern
 @Import(AmqpConfiguration::class)
 open class RxChatApplication
 
-val chatGeneral = "chat.general"
-
 interface ChatMessage
 
 data class GeneralMessage(val body: String) : ChatMessage
-class PrivateMessage(name: String, original: String) : ChatMessage {
-    val routingKey: String
-    val body: String
-
-    init {
-        val parts = PATTERN.split(original, 2)
-        if (parts.size < 2) {
-            throw IllegalArgumentException("Wrong format")
-        }
-        if (parts[0] == AT) {
-            throw IllegalArgumentException("Undefined user")
-        }
-
-        body = "$AT$name says:${parts[1]}"
-        routingKey = "chat.private.${COMPILE.matcher(parts[0]).replaceAll(Matcher.quoteReplacement(""))}"
-    }
-
+data class PrivateMessage(val routingKey: String, val body: String) : ChatMessage {
     companion object {
-        private val PATTERN = Pattern.compile(" ")
-        val AT = "@"
-        private val COMPILE = Pattern.compile(AT, Pattern.LITERAL)
-    }
-
-    override fun toString(): String {
-        return "PrivateMessage(routingKey='$routingKey', body='$body')"
+        val SPACE_PATTERN = Pattern.compile(" ")
     }
 }
 
 fun RabbitTemplate.general(message: GeneralMessage): Unit {
-    convertAndSend(chatGeneral, "", message.body)
+    convertAndSend("chat.general", "", message.body)
 }
 
 fun RabbitTemplate.privately(message: PrivateMessage): Unit {
@@ -85,31 +60,55 @@ fun main(args: Array<String>) {
     chat.latch.await()
 }
 
+private fun String.says(message: String): String {
+    return "@$this says:$message"
+}
+
 fun generalObservable(name: String, input: Observable<String>): Observable<ChatMessage> {
-    return input.filter { s -> !s.startsWith(PrivateMessage.AT) }
-            .map { s -> "${PrivateMessage.AT}$name says:$s" }
+    return input.filter { s -> !s.startsWith("@") }
+            .map { s -> name.says(s) }
             .map { s -> GeneralMessage(s) }
 }
 
 fun privateObservable(name: String, input: Observable<String>): Observable<ChatMessage> {
-    return input.filter { s -> s.startsWith(PrivateMessage.AT) }
-            .map { s -> PrivateMessage(name, s) }
+    return input.filter { s -> s.startsWith("@") }
+            .map { s -> s.split(PrivateMessage.SPACE_PATTERN, 2) }
+            .filter { parts ->
+                val condition = parts.size == 2
+                if (!condition) {
+                    println("Wrong format")
+                }
+                condition
+            }
+            .filter { parts ->
+                val condition = !parts[0].equals("@")
+                if (!condition) {
+                    println("Invalid user")
+                }
+                condition
+            }
+            .map { parts ->
+                PrivateMessage("chat.private.${parts[0].replace("@", "")}",
+                        name.says(parts[1]))
+            }
+
 }
 
 class Chat(val context: ConfigurableApplicationContext,
            val name: String,
            general: Observable<ChatMessage>,
            priv: Observable<ChatMessage>) : Observer<ChatMessage> {
-    val subs = Observable.merge(general, priv).subscribeOn(Schedulers.io()).subscribe(this)
+
     val latch = CountDownLatch(1);
     val template = context[RabbitTemplate::class.java]
 
     init {
+        Observable.merge(general, priv).subscribeOn(Schedulers.io()).subscribe(this)
         template.general(GeneralMessage("$name CONNECTED"))
     }
 
     override fun onNext(message: ChatMessage) {
-        when(message){
+        when (message) {
             is GeneralMessage -> template.general(message)
             is PrivateMessage -> template.privately(message)
         }
@@ -123,7 +122,6 @@ class Chat(val context: ConfigurableApplicationContext,
         template.general(GeneralMessage("$name DISCONNECTED"))
         println("Bye!!")
         latch.countDown()
-        subs.unsubscribe()
         context.close()
     }
 
