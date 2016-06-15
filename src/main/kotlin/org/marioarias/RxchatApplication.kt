@@ -7,9 +7,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Import
 import rx.Observable
-import rx.Observer
 import rx.lang.kotlin.merge
 import rx.lang.kotlin.observable
+import rx.lang.kotlin.subscribeWith
 import rx.observables.ConnectableObservable
 import rx.schedulers.Schedulers
 import java.io.IOException
@@ -60,7 +60,7 @@ fun RabbitTemplate.general(message: GeneralMessage): Unit {
     convertAndSend(chatGeneral, "", message.body)
 }
 
-fun RabbitTemplate.privatelly(message: PrivateMessage): Unit {
+fun RabbitTemplate.privately(message: PrivateMessage): Unit {
     convertAndSend(message.routingKey, message.body)
 }
 
@@ -100,35 +100,33 @@ fun privateObservable(name: String, input: Observable<String>): Observable<ChatM
 
 class Chat(val context: ConfigurableApplicationContext,
            val name: String,
-           vararg obs: Observable<ChatMessage>) : Observer<ChatMessage> {
+           vararg obs: Observable<ChatMessage>) {
 
-    val subs = obs.asIterable().merge().subscribeOn(Schedulers.io()).subscribe(this)
     val latch = CountDownLatch(1);
     val template = context[RabbitTemplate::class.java]
 
     init {
         template.general(GeneralMessage("$name CONNECTED"))
-    }
+        obs.asIterable().merge().subscribeOn(Schedulers.io()).subscribeWith {
+            onNext { message ->
+                when (message) {
+                    is GeneralMessage -> template.general(message)
+                    is PrivateMessage -> template.privately(message)
+                }
+            }
 
-    override fun onNext(message: ChatMessage) {
-        when(message){
-            is GeneralMessage -> template.general(message)
-            is PrivateMessage -> template.privatelly(message)
+            onError { e ->
+                println(e.message)
+            }
+
+            onCompleted {
+                template.general(GeneralMessage("$name DISCONNECTED"))
+                println("Bye!!")
+                latch.countDown()
+                context.close()
+            }
         }
     }
-
-    override fun onError(e: Throwable) {
-        println(e.message)
-    }
-
-    override fun onCompleted() {
-        template.general(GeneralMessage("$name DISCONNECTED"))
-        println("Bye!!")
-        latch.countDown()
-        subs.unsubscribe()
-        context.close()
-    }
-
 }
 
 fun scanner(): ConnectableObservable<String> = observable<String> { subscriber ->
