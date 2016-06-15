@@ -8,6 +8,7 @@ import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Import
 import rx.Observable
 import rx.Observer
+import rx.lang.kotlin.merge
 import rx.lang.kotlin.observable
 import rx.observables.ConnectableObservable
 import rx.schedulers.Schedulers
@@ -99,9 +100,9 @@ fun privateObservable(name: String, input: Observable<String>): Observable<ChatM
 
 class Chat(val context: ConfigurableApplicationContext,
            val name: String,
-           general: Observable<ChatMessage>,
-           priv: Observable<ChatMessage>) : Observer<ChatMessage> {
-    val subs = Observable.merge(general, priv).subscribeOn(Schedulers.io()).subscribe(this)
+           vararg obs: Observable<ChatMessage>) : Observer<ChatMessage> {
+
+    val subs = obs.asIterable().merge().subscribeOn(Schedulers.io()).subscribe(this)
     val latch = CountDownLatch(1);
     val template = context[RabbitTemplate::class.java]
 
