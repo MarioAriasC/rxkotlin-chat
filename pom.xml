@@ -10,7 +10,13 @@
 
     <name>rxchat</name>
     <description>Demo project for Spring Boot</description>
-
+    <repositories>
+        <repository>
+          <id>central</id>
+          <name>bintray</name>
+          <url>http://jcenter.bintray.com</url>
+        </repository>
+    </repositories>
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
