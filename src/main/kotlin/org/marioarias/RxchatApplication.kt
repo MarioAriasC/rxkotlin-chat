@@ -27,7 +27,7 @@ interface ChatMessage
 data class GeneralMessage(val body: String) : ChatMessage
 data class PrivateMessage(val routingKey: String, val body: String) : ChatMessage {
     companion object {
-        val SPACE_PATTERN = Pattern.compile(" ")
+        val SPACE_PATTERN: Pattern = Pattern.compile(" ")
     }
 }
 
@@ -100,7 +100,7 @@ class Chat(val context: ConfigurableApplicationContext,
            val name: String,
            vararg obs: Observable<ChatMessage>) {
 
-    val latch = CountDownLatch(1);
+    val latch = CountDownLatch(1)
     val template = context[RabbitTemplate::class.java]
 
     init {
