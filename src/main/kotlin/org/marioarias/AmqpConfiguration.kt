@@ -20,27 +20,22 @@ open class AmqpConfiguration : RabbitListenerConfigurer {
 
 
     override fun configureRabbitListeners(registrar: RabbitListenerEndpointRegistrar) {
-        val generalEndpoint = SimpleRabbitListenerEndpoint().apply {
+
+        fun listener(prefix: String = ""): (Message) -> Unit = { message: Message ->
+            println(prefix + String(message.body))
+        }
+
+        registrar.registerEndpoint(SimpleRabbitListenerEndpoint().apply {
             id = "generalEndpoint"
             setQueues(generalQueue())
             setMessageListener(listener())
-        }
-        val privateEndpoint = SimpleRabbitListenerEndpoint().apply {
+        })
+        registrar.registerEndpoint(SimpleRabbitListenerEndpoint().apply {
             id = "privateEndpoint"
             setQueues(privateQueue())
             setMessageListener(listener("[PRIVATE ]"))
-        }
-        registrar.registerEndpoint(generalEndpoint)
-        registrar.registerEndpoint(privateEndpoint)
+        })
     }
-
-    private fun listener(prefix: String = ""): (Message) -> Unit {
-        return { message ->
-            println(prefix + String(message.body))
-        }
-    }
-
-    //private val log = LoggerFactory.getLogger(AmqpConfiguration::class.java)
 
     @Bean
     open fun connectionFactory(props: RabbitProperties) = CachingConnectionFactory().apply {
